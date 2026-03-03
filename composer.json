@@ -2,7 +2,8 @@
   "name": "dama-wedding/website",
   "description": "Rotshak & Damaris Wedding Website",
   "require": {
-    "phpmailer/phpmailer": "^6.9"
+    "phpmailer/phpmailer": "^6.9",
+    "ext-json": "*"
   },
   "config": {
     "optimize-autoloader": true
