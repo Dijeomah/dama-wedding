@@ -1,38 +1,36 @@
 <?php
 /**
  * RSVP Form Handler — Rotshak & Damaris Wedding
+ * Uses Brevo (formerly Sendinblue) HTTP API — sends over HTTPS port 443,
+ * so it works even when SMTP ports 587/465 are blocked by the host.
  *
- * Requires PHPMailer. Install via: composer install
- *
- * Gmail App Password setup:
- *  1. Enable 2-Step Verification on the sending Gmail account
- *  2. Visit https://myaccount.google.com/apppasswords
- *  3. Generate a password for "Mail" and paste it into SMTP_PASSWORD below
+ * Setup (takes 2 minutes):
+ *  1. Create a free account at https://app.brevo.com
+ *  2. Go to Settings → API Keys → Generate a new key
+ *  3. Go to Settings → Senders & IP → Add a sender address and verify it
+ *  4. Paste your API key and verified sender email below
  */
 
 header('Content-Type: application/json; charset=UTF-8');
 
 // ============================================================
-//  SMTP Configuration  ← fill in your credentials here
+//  Configuration  ← fill these in
 // ============================================================
-const SMTP_HOST = 'smtp.dreamhost.com';
-const SMTP_PORT = 587;                      // 587 = TLS  |  465 = SSL
-const SMTP_USERNAME = 's.drame@callphoneng.com';   // Gmail address you send FROM
-const SMTP_PASSWORD = 'Ijeoma#95';      // App Password (not your login password)
-const MAIL_FROM = 's.drame@callphoneng.com';   // Same as SMTP_USERNAME
-const MAIL_FROM_NAME = 'Rotshak & Damaris Wedding';
-const MAIL_TO = 'd.ije95@gmail.com';
-const MAIL_TO_NAME = 'Wedding Coordinator';
+const BREVO_API_KEY   = 'YOUR_BREVO_API_KEY';          // ← from Brevo dashboard
+const MAIL_FROM_EMAIL = 'noreply@rotshakwedsdamaris.live'; // ← must be verified in Brevo
+const MAIL_FROM_NAME  = 'Rotshak & Damaris Wedding';
+const MAIL_TO_EMAIL   = 'd.ije95@gmail.com';
+const MAIL_TO_NAME    = 'Wedding Coordinator';
 // ============================================================
 
-// Only allow POST requests
+// Only handle POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
     echo json_encode(['success' => false, 'message' => 'Method not allowed']);
     exit;
 }
 
-// Sanitise all input
+// Sanitise input
 function clean(string $val): string {
     return htmlspecialchars(trim($val), ENT_QUOTES, 'UTF-8');
 }
@@ -51,49 +49,51 @@ if (!$firstName || !$lastName || !$phone || !$attending) {
     exit;
 }
 
-// Load PHPMailer (installed via Composer)
-$autoload = __DIR__ . '/vendor/autoload.php';
-if (!file_exists($autoload)) {
+$attendingLabel = ($attending === 'yes') ? '✅ Joyfully Accepts' : '❌ Regretfully Declines';
+
+// Build the Brevo API payload
+$payload = [
+    'sender'      => ['name' => MAIL_FROM_NAME, 'email' => MAIL_FROM_EMAIL],
+    'to'          => [['email' => MAIL_TO_EMAIL, 'name' => MAIL_TO_NAME]],
+    'subject'     => "Wedding RSVP — {$firstName} {$lastName}",
+    'htmlContent' => buildHtml($firstName, $lastName, $phone, $attendingLabel, $guests, $message),
+    'textContent' => buildText($firstName, $lastName, $phone, $attendingLabel, $guests, $message),
+];
+
+// Send via Brevo API (HTTPS — port 443, never blocked)
+$ch = curl_init('https://api.brevo.com/v3/smtp/email');
+curl_setopt_array($ch, [
+    CURLOPT_POST           => true,
+    CURLOPT_POSTFIELDS     => json_encode($payload),
+    CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_TIMEOUT        => 20,
+    CURLOPT_HTTPHEADER     => [
+        'accept: application/json',
+        'content-type: application/json',
+        'api-key: ' . BREVO_API_KEY,
+    ],
+]);
+
+$response = curl_exec($ch);
+$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr  = curl_error($ch);
+curl_close($ch);
+
+if ($curlErr) {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Mailer not installed. Run: composer install']);
+    echo json_encode(['success' => false, 'message' => 'Network error: ' . $curlErr]);
     exit;
 }
-require_once $autoload;
 
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
-$mail = new PHPMailer(true);
-
-try {
-    // ── SMTP settings ─────────────────────────────────────
-    $mail->isSMTP();
-    $mail->Host       = SMTP_HOST;
-    $mail->SMTPAuth   = true;
-    $mail->Username   = SMTP_USERNAME;
-    $mail->Password   = SMTP_PASSWORD;
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port       = SMTP_PORT;
-    $mail->CharSet    = 'UTF-8';
-
-    // ── Recipients ────────────────────────────────────────
-    $mail->setFrom(MAIL_FROM, MAIL_FROM_NAME);
-    $mail->addAddress(MAIL_TO, MAIL_TO_NAME);
-
-    // ── Content ───────────────────────────────────────────
-    $attendingLabel = ($attending === 'yes') ? 'Joyfully Accepts' : 'Regretfully Declines';
-    $mail->isHTML(true);
-    $mail->Subject = "Wedding RSVP — {$firstName} {$lastName}";
-    $mail->Body    = buildHtml($firstName, $lastName, $phone, $attendingLabel, $guests, $message);
-    $mail->AltBody = buildText($firstName, $lastName, $phone, $attendingLabel, $guests, $message);
-
-    $mail->send();
+if ($httpCode >= 200 && $httpCode < 300) {
     echo json_encode(['success' => true]);
-
-} catch (Exception $e) {
+} else {
     http_response_code(500);
-    echo json_encode(['success' => false, 'message' => $mail->ErrorInfo]);
+    $body = json_decode($response, true);
+    echo json_encode([
+        'success' => false,
+        'message' => $body['message'] ?? "Brevo error (HTTP {$httpCode})",
+    ]);
 }
 
 
@@ -138,49 +138,40 @@ function buildHtml(string $fn, string $ln, string $phone, string $attending,
             <p style="margin:0 0 28px;font-size:14px;line-height:1.7;color:#666">
               A guest has submitted their RSVP for the wedding of
               <strong style="color:#2a2a2a">Rotshak Micah &amp; Damaris Chika</strong>.
-              Details are listed below.
             </p>
 
-            <!-- Detail rows -->
-            <table width="100%" cellpadding="0" cellspacing="0"
-                   style="border-top:1px solid #f0ead8">
+            <table width="100%" cellpadding="0" cellspacing="0" style="border-top:1px solid #f0ead8">
               <tr>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;width:38%;
                            font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#b5975a">
-                  Guest Name
-                </td>
+                  Guest Name</td>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
-                           font-size:15px;color:#2a2a2a">
-                  <strong>{$fn} {$ln}</strong>
-                </td>
+                           font-size:15px;color:#2a2a2a"><strong>{$fn} {$ln}</strong></td>
               </tr>
               <tr>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#b5975a">
-                  Phone
-                </td>
+                  Phone</td>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:15px;color:#2a2a2a">{$phone}</td>
               </tr>
               <tr>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#b5975a">
-                  Attendance
-                </td>
+                  Attendance</td>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:15px;color:#2a2a2a">{$attending}</td>
               </tr>
               <tr>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#b5975a">
-                  No. of Guests
-                </td>
+                  No. of Guests</td>
                 <td style="padding:15px 0;border-bottom:1px solid #f0ead8;
                            font-size:15px;color:#2a2a2a">{$guests}</td>
               </tr>
             </table>
 
-            <!-- Message block -->
+            <!-- Message -->
             <div style="margin-top:28px;padding:22px 24px;background:#f8f4ec;
                         border-left:3px solid #b5975a;border-radius:0 10px 10px 0">
               <p style="margin:0 0 10px;font-size:11px;letter-spacing:2px;

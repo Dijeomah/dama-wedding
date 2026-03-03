@@ -1167,27 +1167,50 @@ document.addEventListener('keydown', e => {
 });
 
 // ============================
-//  RSVP — POST to rsvp.php
+//  RSVP — Web3Forms (no PHP)
 // ============================
+const WEB3FORMS_KEY = 'dad47e04-ced3-4224-9b4b-f28fd9e52dde'; // ← paste your key from web3forms.com
+
 document.getElementById('rsvpForm').addEventListener('submit', async function(e) {
   e.preventDefault();
-  const btn = document.getElementById('rsvpBtn');
+  const btn  = document.getElementById('rsvpBtn');
+  const data = new FormData(this);
+
   btn.textContent = 'Sending…';
   btn.disabled = true;
 
+  // Build a readable subject line
+  const name = `${data.get('first_name')} ${data.get('last_name')}`;
+  const attending = data.get('attending') === 'yes' ? 'Joyfully Accepts ✓' : 'Regretfully Declines';
+
+  const payload = {
+    access_key:  WEB3FORMS_KEY,
+    subject:     `Wedding RSVP — ${name}`,
+    from_name:   'Rotshak & Damaris Wedding Site',
+    'Guest Name':   name,
+    'Phone':        data.get('phone'),
+    'Attendance':   attending,
+    'No. of Guests': data.get('guests'),
+    'Message':      data.get('message') || '(none)',
+  };
+
   try {
-    const res  = await fetch('rsvp.php', { method: 'POST', body: new FormData(this) });
+    const res  = await fetch('https://api.web3forms.com/submit', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body:    JSON.stringify(payload),
+    });
     const json = await res.json();
     if (json.success) {
       this.style.display = 'none';
       document.getElementById('formDone').style.display = 'block';
     } else {
-      alert('Something went wrong — please call us directly or try again.\n\n' + (json.message || ''));
+      alert('Something went wrong — please call us directly or try again.');
       btn.textContent = 'Send My Reply';
       btn.disabled = false;
     }
   } catch (_) {
-    alert('Could not reach the server. Please call or WhatsApp us directly.');
+    alert('Could not send — please call or WhatsApp us directly.');
     btn.textContent = 'Send My Reply';
     btn.disabled = false;
   }
