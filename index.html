@@ -636,6 +636,9 @@
             object-fit: cover;
             transition: transform 0.5s ease;
             display: block;
+            pointer-events: none;       /* blocks right-click "Save Image As" on the media element */
+            -webkit-user-drag: none;    /* blocks drag-to-desktop on Safari/Chrome */
+            user-select: none;
         }
 
         .gallery-item:hover img,
@@ -1322,27 +1325,27 @@
             </div>
 
             <div class="gallery-item reveal" onclick="openLb(1)">
-                <img src="assets/img/photo2.jpg" alt="Rotshak &amp; Damaris">
+                <img src="assets/img/FASA1277.jpg" alt="Rotshak &amp; Damaris">
                 <div class="gallery-overlay"><i class="fa-solid fa-expand"></i></div>
             </div>
 
             <div class="gallery-item reveal" onclick="openLb(2)">
-                <img src="assets/img/photo3.jpg" alt="Rotshak &amp; Damaris">
+                <img src="assets/img/FASA1724.jpg" alt="Rotshak &amp; Damaris">
                 <div class="gallery-overlay"><i class="fa-solid fa-expand"></i></div>
             </div>
 
             <div class="gallery-item reveal" onclick="openLb(3)">
-                <img src="assets/img/photo4.jpg" alt="Rotshak &amp; Damaris">
+                <img src="assets/img/FASA1855.jpg" alt="Rotshak &amp; Damaris">
                 <div class="gallery-overlay"><i class="fa-solid fa-expand"></i></div>
             </div>
 
             <div class="gallery-item reveal" onclick="openLb(4)">
-                <img src="assets/img/photo5.jpg" alt="Rotshak &amp; Damaris">
+                <img src="assets/img/FASA1031.jpg" alt="Rotshak &amp; Damaris">
                 <div class="gallery-overlay"><i class="fa-solid fa-expand"></i></div>
             </div>
 
             <div class="gallery-item reveal" onclick="openLb(5)">
-                <img src="assets/img/photo6.jpg" alt="Rotshak &amp; Damaris">
+                <img src="assets/img/FASA1922.jpg" alt="Rotshak &amp; Damaris">
                 <div class="gallery-overlay"><i class="fa-solid fa-expand"></i></div>
             </div>
 
@@ -1542,6 +1545,16 @@
       style="max-width:90vw;max-height:85vh;border-radius:8px;object-fit:contain">`;
         }
     }
+
+    // ============================
+    //  GALLERY PROTECTION
+    // ============================
+    // Block right-click context menu on gallery and lightbox
+    document.getElementById('galleryGrid').addEventListener('contextmenu', e => e.preventDefault());
+    document.getElementById('lightbox').addEventListener('contextmenu', e => e.preventDefault());
+
+    // Block drag on gallery items (extra belt-and-suspenders alongside CSS)
+    document.getElementById('galleryGrid').addEventListener('dragstart', e => e.preventDefault());
 
     document.getElementById('lightbox').addEventListener('click', function (e) {
         if (e.target === this) closeLb();
