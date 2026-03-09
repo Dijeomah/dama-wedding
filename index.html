@@ -1377,6 +1377,8 @@
                 <div style="flex:1;height:1px;background:rgba(255,255,255,0.15)"></div>
             </div>
             <form id="rsvpForm" novalidate>
+                <!-- Honeypot: hidden from real users; bots fill it → Web3Forms auto-rejects -->
+                <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
                 <div class="form-row">
                     <div class="form-group">
                         <label for="f_first">First Name</label>
@@ -1569,7 +1571,7 @@
     // ============================
     //  RSVP — Web3Forms (no PHP)
     // ============================
-    const WEB3FORMS_KEY = 'dad47e04-ced3-4224-9b4b-f28fd9e52dde'; // ← paste your key from web3forms.com
+    const WEB3FORMS_KEY = 'dad47e04-ced3-4224-9b4b-f28fd9e52dde'; // paste your key from web3forms.com
 
     document.getElementById('rsvpForm').addEventListener('submit', async function (e) {
         e.preventDefault();
